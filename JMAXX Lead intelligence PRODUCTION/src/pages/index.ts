@@ -13,3 +13,4 @@ export { LogsPage } from './LogsPage';
 export { WebsiteFormTestPage } from './WebsiteFormTestPage';
 export { ValidationPage } from './ValidationPage';
 export { DeploymentPage } from './DeploymentPage';
+export { ProspectorPage } from './ProspectorPage';
