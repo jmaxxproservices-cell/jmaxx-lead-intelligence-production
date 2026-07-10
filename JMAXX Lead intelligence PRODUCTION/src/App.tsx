@@ -16,6 +16,7 @@ import {
   WebsiteFormTestPage,
   ValidationPage,
   DeploymentPage,
+  ProspectorPage,
 } from './pages';
 
 function App() {
@@ -38,6 +39,7 @@ function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="api" element={<ApiPage />} />
           <Route path="logs" element={<LogsPage />} />
+          <Route path="prospector" element={<ProspectorPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
@@ -45,4 +47,3 @@ function App() {
 }
 
 export default App;
-export { ProspectorPage } from './ProspectorPage';
