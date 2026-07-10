@@ -1,7 +1,9 @@
 import { Lead } from '../types';
 
-export function formatDate(date: string | Date): string {
+export function formatDate(date: string | Date | null | undefined): string {
+  if (!date) return 'N/A';
   const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return 'N/A';
   return new Intl.DateTimeFormat('es-CH', {
     day: '2-digit',
     month: '2-digit',
@@ -11,14 +13,15 @@ export function formatDate(date: string | Date): string {
   }).format(d);
 }
 
-export function formatRelativeDate(date: string | Date): string {
+export function formatRelativeDate(date: string | Date | null | undefined): string {
+  if (!date) return 'N/A';
   const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return 'N/A';
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
-
   if (diffMins < 1) return 'Ahora mismo';
   if (diffMins < 60) return `Hace ${diffMins} min`;
   if (diffHours < 24) return `Hace ${diffHours}h`;
@@ -35,12 +38,7 @@ export function getScoreColor(score: number): string {
 
 export function getInitials(name: string | null): string {
   if (!name) return '??';
-  return name
-    .split(' ')
-    .map(n => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
 export function generateLeadId(): string {
