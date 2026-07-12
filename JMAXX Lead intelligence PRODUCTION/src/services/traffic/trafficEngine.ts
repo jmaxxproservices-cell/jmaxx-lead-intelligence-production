@@ -1,40 +1,34 @@
 import { supabase } from '@/lib/supabase';
 import { normalizeLead } from './leadNormalizer';
 import { triggerHotLeadAutomation } from './automation';
-
-// Definimos la estructura limpia de los datos que permite la ley
-export interface TrafficPayload {
-  source: string;        // Origen del cliente (ej. 'shopify_form', 'facebook_ads')
-  external_id?: string;   // ID único de la plataforma de origen
-  name?: string;          // Nombre del cliente
-  phone?: string;         // Teléfono de contacto
-  email?: string;         // Correo electrónico
-  city?: string;          // Ciudad (ej. Neuchâtel)
-  canton?: string;        // Cantón inferido
-  service?: string;       // Tipo de servicio solicitado
-  message?: string;       // Mensaje o descripción del trabajo
-  metadata?: Record<string, unknown>; // Datos técnicos adicionales seguros
-}
-
-export interface TrafficResult {
-  success: boolean;
-  leadId?: string;
-  classification?: string;
-  duplicate?: boolean;
-  error?: string;
-}
+import { validateAndGetSource } from './sourceRegistry';
+import { TrafficPayload, TrafficResult } from './types';
 
 /**
- * Función principal y legal para procesar clientes entrantes autorizados.
+ * Función central del negocio: Procesa clientes de múltiples fuentes autorizadas.
  */
 export async function processInboundLead(
   payload: TrafficPayload
 ): Promise<TrafficResult> {
   try {
-    // 1. Limpiamos y normalizamos los datos del cliente (Teléfono a +41, Cantón, etc.)
+    // 1. Validamos si la fuente externa está registrada y activa en el sistema
+    const sourceConfig = validateAndGetSource(payload.source);
+    if (!sourceConfig) {
+      return {
+        success: false,
+        error: `La fuente de tráfico '${payload.source}' no está autorizada o está desactivada.`
+      };
+    }
+
+    // 2. Si el payload no trae servicio, le asignamos el servicio por defecto configurado para esa fuente
+    if (!payload.service && sourceConfig.defaultService) {
+      payload.service = sourceConfig.defaultService;
+    }
+
+    // 3. Limpiamos los datos del cliente (Teléfonos suizos a +41, inferencia de Cantón, etc.)
     const normalized = normalizeLead(payload);
 
-    // 2. Control de Duplicados (Evita procesar dos veces al mismo cliente en un periodo corto)
+    // 4. Control de duplicados en la base de datos para cumplir con normativas de datos
     const duplicate = await findDuplicateLead(
       normalized.phone,
       normalized.email
@@ -48,16 +42,16 @@ export async function processInboundLead(
       };
     }
 
-    // 3. Sistema de Puntuación de Intención (Calcula la urgencia del servicio en francés)
+    // 5. Calculamos el nivel de urgencia de la solicitud en francés
     const score = calculateIntentScore(normalized);
     
-    // Clasificación basada en el puntaje acumulado
+    // Clasificación inteligente del cliente potencial
     let classification = 'medium';
     if (score >= 80) classification = 'hot';
     else if (score >= 65) classification = 'high';
     else if (score < 40) classification = 'low';
 
-    // 4. Inserción segura en tu tabla de Leads de Supabase
+    // 6. Inserción en la base de datos de Supabase asignando el estado inicial
     const { data: lead, error } = await supabase
       .from('leads')
       .insert({
@@ -72,8 +66,11 @@ export async function processInboundLead(
         description: normalized.message,
         score,
         classification,
-        status: 'new',
-        metadata: normalized.metadata ?? {}
+        status: sourceConfig.autoApprove ? 'new' : 'qualification', // Si no auto-aprueba, va a calificación manual
+        metadata: {
+          ...(normalized.metadata ?? {}),
+          source_display_name: sourceConfig.name
+        }
       })
       .select()
       .single();
@@ -82,10 +79,10 @@ export async function processInboundLead(
       throw error;
     }
 
-    // 5. Registramos el evento en el historial interno del sistema
+    // 7. Guardamos el rastro del evento para control del negocio
     await logLeadCreated(lead.id);
 
-    // 6. Si el cliente tiene una necesidad urgente (HOT), disparamos la alerta push inmediata
+    // 8. Alerta inmediata en tu teléfono o canal asignado para clientes HOT
     if (classification === 'hot') {
       await triggerHotLeadAutomation({
         leadId: lead.id,
@@ -109,9 +106,6 @@ export async function processInboundLead(
   }
 }
 
-/**
- * Busca si el cliente ya existe en el sistema por teléfono o email para cumplir con la LPD.
- */
 async function findDuplicateLead(phone?: string, email?: string) {
   if (!phone && !email) return null;
 
@@ -128,18 +122,14 @@ async function findDuplicateLead(phone?: string, email?: string) {
   return data;
 }
 
-/**
- * Analiza el texto del cliente de forma inteligente y legal para priorizar emergencias en Neuchâtel.
- */
 function calculateIntentScore(lead: TrafficPayload): number {
-  let score = 50; // Puntuación base neutral
+  let score = 50;
 
   const text = `
     ${lead.service ?? ''}
     ${lead.message ?? ''}
   `.toLowerCase();
 
-  // Palabras clave en francés para priorizar solicitudes urgentes
   if (text.includes('urgent')) score += 20;
   if (text.includes('immédiat')) score += 20;
   if (text.includes('fin de bail')) score += 15;
@@ -147,16 +137,12 @@ function calculateIntentScore(lead: TrafficPayload): number {
   if (text.includes('vide maison')) score += 15;
   if (text.includes('déménagement')) score += 10;
 
-  // Priorizamos leads que dejen datos completos de contacto rápido
   if (lead.phone) score += 10;
   if (lead.email) score += 5;
 
-  return Math.min(score, 100); // El límite máximo es 100
+  return Math.min(score, 100);
 }
 
-/**
- * Guarda el rastro técnico de la creación para auditorías internas.
- */
 async function logLeadCreated(leadId: string) {
   await supabase
     .from('lead_events')
