@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-
-import { Layout } from "./components/layout";
-
+import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Layout } from './components/layout';
 import {
   DashboardPage,
   OperationsDashboardPage,
@@ -20,65 +18,99 @@ import {
   ValidationPage,
   DeploymentPage,
   ProspectorPage,
-} from "./pages";
-
-const SESSION_KEY = "jmaxx_dashboard_authenticated";
+} from './pages';
 
 function App() {
-  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  // 1. Estado null para evitar parpadeos visuales al verificar sesión
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [authError, setAuthError] = useState(false);
+
+  const handleLogin = () => {
+    const sessionKey = 'jmaxx_auth_session';
+    const correctUser = 'jmaxxpro';
+    const correctPwd = 'Suiza2026!';
+
+    const user = prompt('👤 Usuario de acceso JMAXX:');
+    const psw = prompt('🔒 Contraseña privada JMAXX:');
+
+    if (user === correctUser && psw === correctPwd) {
+      sessionStorage.setItem(sessionKey, 'true');
+      setIsAuthenticated(true);
+      setAuthError(false);
+    } else {
+      setAuthError(true);
+      setIsAuthenticated(false);
+    }
+  };
 
   useEffect(() => {
-    if (sessionStorage.getItem(SESSION_KEY) === "true") {
-      setAuthenticated(true);
-      return;
+    const sessionKey = 'jmaxx_auth_session';
+    const hasSession = sessionStorage.getItem(sessionKey);
+
+    if (hasSession === 'true') {
+      setIsAuthenticated(true);
+    } else {
+      handleLogin();
     }
-
-    const expectedUser = import.meta.env.VITE_BASIC_AUTH_USER;
-    const expectedPassword = import.meta.env.VITE_BASIC_AUTH_PASSWORD;
-
-    const user = window.prompt("Utilisateur");
-    if (user === null) {
-      setAuthenticated(false);
-      return;
-    }
-
-    const password = window.prompt("Mot de passe");
-    if (password === null) {
-      setAuthenticated(false);
-      return;
-    }
-
-    if (user === expectedUser && password === expectedPassword) {
-      sessionStorage.setItem(SESSION_KEY, "true");
-      setAuthenticated(true);
-      return;
-    }
-
-    setAuthenticated(false);
   }, []);
 
-  if (authenticated === null) {
+  // Mientras se comprueba la sesión, la pantalla no muestra nada para una UX limpia
+  if (isAuthenticated === null) {
     return null;
   }
 
-  if (!authenticated) {
+  // 2. Pantalla de bloqueo elegante si no está autenticado o cancela el prompt
+  if (!isAuthenticated) {
     return (
-      <div
-        style={{
-          display: "grid",
-          placeItems: "center",
-          height: "100vh",
-          fontFamily: "sans-serif",
-        }}
-      >
-        <div>
-          <h2>Accès refusé</h2>
-          <p>Authentification requise.</p>
+      <div style={{ 
+        background: '#0a0a0a', 
+        color: '#fff', 
+        height: '100vh', 
+        display: 'flex', 
+        flexDirection: 'column',
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        fontFamily: 'sans-serif',
+        textAlign: 'center',
+        padding: '20px'
+      }}>
+        <div style={{ background: '#141414', padding: '40px', borderRadius: '12px', border: '1px solid #262626', maxWidth: '400px' }}>
+          <h2 style={{ marginBottom: '10px' }}>🔒 Panel Privado JMAXX</h2>
+          <p style={{ color: '#a3a3a3', fontSize: '14px', marginBottom: '24px' }}>
+            Este sistema contiene información comercial confidencial de la empresa.
+          </p>
+          
+          {authError && (
+            <div style={{ background: '#7f1d1d', color: '#fca5a5', padding: '12px', borderRadius: '6px', fontSize: '14px', marginBottom: '20px' }}>
+              ❌ Credenciales incorrectas. Acceso denegado.
+            </div>
+          )}
+
+          {/* 3. Botón con UX corregida según la sugerencia de GPT */}
+          <button 
+            onClick={handleLogin}
+            style={{ 
+              background: '#fff', 
+              color: '#000', 
+              border: 'none', 
+              padding: '12px 24px', 
+              borderRadius: '6px', 
+              fontWeight: 'bold', 
+              cursor: 'pointer',
+              fontSize: '14px',
+              transition: 'background 0.2s'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.background = '#e5e5e5'}
+            onMouseOut={(e) => e.currentTarget.style.background = '#fff'}
+          >
+            🔑 Introducir credenciales
+          </button>
         </div>
       </div>
     );
   }
 
+  // 4. Bloqueo total del BrowserRouter hasta que la sesión sea válida
   return (
     <BrowserRouter>
       <Routes>
@@ -93,10 +125,7 @@ function App() {
           <Route path="validation" element={<ValidationPage />} />
           <Route path="deployment" element={<DeploymentPage />} />
           <Route path="system" element={<SystemStatusPage />} />
-          <Route
-            path="website-integration"
-            element={<WebsiteFormTestPage />}
-          />
+          <Route path="website-integration" element={<WebsiteFormTestPage />} />
           <Route path="activities" element={<ActivitiesPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="api" element={<ApiPage />} />
